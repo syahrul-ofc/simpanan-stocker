@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Gudang Online (Google Sheet)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+    h2 { text-align: center; }
+    .container { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    input, button { padding: 10px; margin: 5px 0; width: 100%; border: 1px solid #ccc; border-radius: 5px; }
+    button { background: #28a745; color: white; font-weight: bold; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #007bff; color: white; }
+    .btn-hapus { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+    .btn-hapus:hover { background: #c82333; }
+    .btn-edit { background: #ffc107; color: black; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+    .btn-edit:hover { background: #e0a800; }
+    .search-bar { position: sticky; top: 0; background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>📦 Simpanan Barang Stocker Anomali</h2>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="text" id="cari" placeholder="🔍 Cari kode atau nama barang..." onkeyup="tampilkanData()">
+  </div>
+
+  <div class="container">
+    <h3>➕ Tambah / Update Barang</h3>
+    <input type="text" id="kode" placeholder="Kode Barang" required>
+    <input type="text" id="nama" placeholder="Nama Barang" required>
+    <input type="number" id="qty" placeholder="Qty Barang" required>
+    <button onclick="tambahBarang()">Simpan</button>
+  </div>
+
+  <div class="container">
+    <h3>📋 Daftar Stock Barang</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Kode Barang</th>
+          <th>Nama Barang</th>
+          <th>Qty</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="tabelBarang"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // 🔹 Ganti dengan API URL kamu dari SheetDB.io
+    const API_URL = "https://sheetdb.io/api/v1/sz6a4il5q3vwv";
+
+    async function tambahBarang() {
+      let kode = document.getElementById("kode").value.trim();
+      let nama = document.getElementById("nama").value.trim();
+      let qty = parseInt(document.getElementById("qty").value);
+
+      if (!kode || !nama || isNaN(qty) || qty <= 0) {
+        alert("Harap isi semua data dengan benar!");
+        return;
+      }
+
+      // Cek apakah kode sudah ada
+      let res = await fetch(`${API_URL}/search?kode=${kode}`);
+      let existing = await res.json();
+
+      if (existing.length > 0) {
+        // Jika ada → update qty
+        let newQty = parseInt(existing[0].qty) + qty;
+        await fetch(`${API_URL}/kode/${kode}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qty: newQty, nama })
+        });
+      } else {
+        // Jika belum ada → tambah baru
+        await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: [{ kode, nama, qty }] })
+        });
+      }
+
+      // Reset input
+      document.getElementById("kode").value = "";
+      document.getElementById("nama").value = "";
+      document.getElementById("qty").value = "";
+
+      tampilkanData();
+    }
+
+    async function hapusBarang(kode) {
+      if (confirm("Yakin ingin menghapus barang ini?")) {
+        await fetch(`${API_URL}/kode/${kode}`, { method: "DELETE" });
+        tampilkanData();
+      }
+    }
+
+    async function editBarang(kode, nama, qty) {
+      let newQty = prompt(`Masukkan Qty baru untuk ${nama}`, qty);
+      if (newQty !== null && !isNaN(newQty) && newQty >= 0) {
+        await fetch(`${API_URL}/kode/${kode}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qty: parseInt(newQty) })
+        });
+        tampilkanData();
+      }
+    }
+
+    async function tampilkanData() {
+      let keyword = document.getElementById("cari").value.toLowerCase();
+      let tabel = document.getElementById("tabelBarang");
+      tabel.innerHTML = "<tr><td colspan='4'>Loading...</td></tr>";
+
+      let res = await fetch(API_URL);
+      let data = await res.json();
+
+      tabel.innerHTML = "";
+      data
+        .filter(b => b.kode.toLowerCase().includes(keyword) || b.nama.toLowerCase().includes(keyword))
+        .forEach(b => {
+          let row = `<tr>
+                      <td>${b.kode}</td>
+                      <td>${b.nama}</td>
+                      <td>${b.qty}</td>
+                      <td>
+                        <button class="btn-edit" onclick="editBarang('${b.kode}','${b.nama}',${b.qty})">✏️ Edit</button>
+                        <button class="btn-hapus" onclick="hapusBarang('${b.kode}')">❌ Hapus</button>
+                      </td>
+                    </tr>`;
+          tabel.innerHTML += row;
+        });
+    }
+
+    tampilkanData();
+  </script>
+
+</body>
+</html>
